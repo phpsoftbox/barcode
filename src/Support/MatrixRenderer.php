@@ -114,11 +114,13 @@ final class MatrixRenderer
     }
 
     /**
+     * Размеры отрисовки: сторона холста, число модулей, сторона модуля в пикселях и отступ символа от края холста.
+     *
      * @param list<list<bool>> $matrix
      *
      * @return array{canvasSize: int, matrixSize: int, moduleSize: int, offset: int}
      */
-    private function resolveGeometry(array $matrix, int $size, int $margin): array
+    public function resolveGeometry(array $matrix, int $size, int $margin): array
     {
         if ($size <= 0 || $margin < 0) {
             throw new BarcodeException('Invalid matrix rendering options.');

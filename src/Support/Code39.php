@@ -120,12 +120,12 @@ final class Code39
     private static function fullAsciiPair(int $code): string
     {
         return match (true) {
-            $code === 0                => '%U',
-            $code >= 1 && $code <= 26  => '$' . chr(64 + $code),
-            $code >= 27 && $code <= 31 => '%' . chr(65 + $code - 27),
-            $code === 32               => ' ',
-            $code >= 33 && $code <= 44 => '/' . chr(65 + $code - 33),
-            $code === 45, $code === 46 => chr($code),
+            $code === 0                  => '%U',
+            $code >= 1 && $code <= 26    => '$' . chr(64 + $code),
+            $code >= 27 && $code <= 31   => '%' . chr(65 + $code - 27),
+            $code === 32                 => ' ',
+            $code >= 33 && $code <= 44   => '/' . chr(65 + $code - 33),
+            $code === 45, $code === 46   => chr($code),
             $code === 47                 => '/O',
             $code >= 48 && $code <= 57   => chr($code),
             $code === 58                 => '/Z',
