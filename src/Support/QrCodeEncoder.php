@@ -9,106 +9,54 @@ use PhpSoftBox\Barcode\QrErrorCorrectionLevel;
 
 use function abs;
 use function array_fill;
+use function array_slice;
+use function array_unshift;
 use function count;
 use function floor;
 use function intdiv;
+use function min;
 use function ord;
+use function sprintf;
 use function strlen;
 
+/**
+ * Кодировщик QR (ISO/IEC 18004) в байтовом режиме: версии 1–40, уровни коррекции M и H.
+ */
 final class QrCodeEncoder
 {
-    /** @var array<string, array{data: array<int, int>, ecc: array<int, int>, blocks: array<int, int>}> */
-    private const CAPACITY = [
+    public const int MIN_VERSION = 1;
+    public const int MAX_VERSION = 40;
+
+    /**
+     * Кодовых слов коррекции на блок (ISO/IEC 18004, таблица 9), индекс — версия.
+     *
+     * @var array<string, list<int>>
+     */
+    private const array ECC_CODEWORDS_PER_BLOCK = [
         'M' => [
-            'data' => [
-                1  => 16,
-                2  => 28,
-                3  => 44,
-                4  => 64,
-                5  => 86,
-                6  => 108,
-                7  => 124,
-                8  => 154,
-                9  => 182,
-                10 => 216,
-            ],
-            'ecc' => [
-                1  => 10,
-                2  => 16,
-                3  => 26,
-                4  => 18,
-                5  => 24,
-                6  => 16,
-                7  => 18,
-                8  => 22,
-                9  => 22,
-                10 => 26,
-            ],
-            'blocks' => [
-                1  => 1,
-                2  => 1,
-                3  => 1,
-                4  => 2,
-                5  => 2,
-                6  => 4,
-                7  => 4,
-                8  => 4,
-                9  => 5,
-                10 => 5,
-            ],
+            0, 10, 16, 26, 18, 24, 16, 18, 22, 22, 26, 30, 22, 22, 24, 24, 28, 28, 26, 26, 26,
+            26, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28,
         ],
         'H' => [
-            'data' => [
-                1  => 9,
-                2  => 16,
-                3  => 26,
-                4  => 36,
-                5  => 46,
-                6  => 60,
-                7  => 66,
-                8  => 86,
-                9  => 100,
-                10 => 122,
-            ],
-            'ecc' => [
-                1  => 17,
-                2  => 28,
-                3  => 22,
-                4  => 16,
-                5  => 22,
-                6  => 28,
-                7  => 26,
-                8  => 26,
-                9  => 24,
-                10 => 28,
-            ],
-            'blocks' => [
-                1  => 1,
-                2  => 1,
-                3  => 2,
-                4  => 4,
-                5  => 4,
-                6  => 4,
-                7  => 5,
-                8  => 6,
-                9  => 8,
-                10 => 8,
-            ],
+            0, 17, 28, 22, 16, 22, 28, 26, 26, 24, 28, 24, 28, 22, 24, 24, 30, 28, 28, 26, 28,
+            30, 24, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30,
         ],
     ];
 
-    /** @var array<int, list<int>> */
-    private const ALIGNMENT_PATTERN_POSITIONS = [
-        1  => [],
-        2  => [6, 18],
-        3  => [6, 22],
-        4  => [6, 26],
-        5  => [6, 30],
-        6  => [6, 34],
-        7  => [6, 22, 38],
-        8  => [6, 24, 42],
-        9  => [6, 26, 46],
-        10 => [6, 28, 50],
+    /**
+     * Число блоков коррекции (ISO/IEC 18004, таблица 9), индекс — версия.
+     *
+     * @var array<string, list<int>>
+     */
+    private const array ERROR_CORRECTION_BLOCKS = [
+        'M' => [
+            0, 1, 1, 1, 2, 2, 4, 4, 4, 5, 5, 5, 8, 9, 9, 10, 10, 11, 13, 14, 16,
+            17, 17, 18, 20, 21, 23, 25, 26, 28, 29, 31, 33, 35, 37, 38, 40, 43, 45, 47, 49,
+        ],
+        'H' => [
+            0, 1, 1, 2, 4, 4, 4, 5, 6, 8, 8, 11, 11, 16, 16, 18, 16, 19, 21, 25, 25,
+            25, 34, 30, 32, 35, 37, 40, 42, 45, 48, 51, 54, 57, 60, 63, 66, 70, 74, 77, 81,
+        ],
     ];
 
     private ReedSolomon $reedSolomon;
@@ -123,13 +71,94 @@ final class QrCodeEncoder
      */
     public function encode(string $data, QrErrorCorrectionLevel $level = QrErrorCorrectionLevel::M): array
     {
+        return $this->encodeSymbol($data, $level)->matrix;
+    }
+
+    /**
+     * Кодирует данные в байтовом режиме минимальной подходящей версией 1–40.
+     */
+    public function encodeSymbol(string $data, QrErrorCorrectionLevel $level = QrErrorCorrectionLevel::M): QrSymbol
+    {
         $bytes   = $this->toBytes($data);
         $version = $this->chooseVersion(count($bytes), $level);
 
-        $dataCodewords = $this->buildDataCodewords($bytes, $version, $level);
-        $codewords     = $this->addErrorCorrection($dataCodewords, $version, $level);
+        $dataCodewords                = $this->buildDataCodewords($bytes, $version, $level);
+        [$codewords, $codewordBlocks] = $this->addErrorCorrection($dataCodewords, $version, $level);
 
-        return $this->buildMatrix($version, $codewords, $level);
+        return $this->buildSymbol($version, $codewords, $codewordBlocks, $level);
+    }
+
+    /**
+     * Сколько байт вмещает версия при заданном уровне коррекции (байтовый режим).
+     */
+    public static function byteCapacity(int $version, QrErrorCorrectionLevel $level): int
+    {
+        self::assertVersion($version);
+
+        return intdiv(self::dataCodewordCount($version, $level) * 8 - 4 - self::countBits($version), 8);
+    }
+
+    /**
+     * Координаты центров выравнивающих узоров по одной оси (ISO/IEC 18004, приложение E).
+     *
+     * @return list<int>
+     */
+    public static function alignmentPatternPositions(int $version): array
+    {
+        self::assertVersion($version);
+
+        if ($version === 1) {
+            return [];
+        }
+
+        $count     = intdiv($version, 7) + 2;
+        $step      = intdiv($version * 8 + $count * 3 + 5, $count * 4 - 4) * 2;
+        $positions = [];
+
+        for ($position = $version * 4 + 10; count($positions) < $count - 1; $position -= $step) {
+            array_unshift($positions, $position);
+        }
+
+        array_unshift($positions, 6);
+
+        return $positions;
+    }
+
+    private static function assertVersion(int $version): void
+    {
+        if ($version < self::MIN_VERSION || $version > self::MAX_VERSION) {
+            throw new BarcodeException(sprintf('QR version must be in range 1–40, %d given.', $version));
+        }
+    }
+
+    private static function countBits(int $version): int
+    {
+        return $version <= 9 ? 8 : 16;
+    }
+
+    private static function dataCodewordCount(int $version, QrErrorCorrectionLevel $level): int
+    {
+        return intdiv(self::rawDataModules($version), 8)
+            - self::ECC_CODEWORDS_PER_BLOCK[$level->value][$version] * self::ERROR_CORRECTION_BLOCKS[$level->value][$version];
+    }
+
+    /**
+     * Число модулей под данные и коррекцию: вся матрица без служебных узоров, формата и версии.
+     */
+    private static function rawDataModules(int $version): int
+    {
+        $result = (16 * $version + 128) * $version + 64;
+
+        if ($version >= 2) {
+            $alignment = intdiv($version, 7) + 2;
+            $result -= (25 * $alignment - 10) * $alignment - 55;
+
+            if ($version >= 7) {
+                $result -= 36;
+            }
+        }
+
+        return $result;
     }
 
     /**
@@ -149,18 +178,18 @@ final class QrCodeEncoder
 
     private function chooseVersion(int $byteCount, QrErrorCorrectionLevel $level): int
     {
-        $capacity = $this->levelData($level)['data'];
-        foreach ($capacity as $version => $dataCodewords) {
-            $countBits    = $version <= 9 ? 8 : 16;
-            $required     = 4 + $countBits + ($byteCount * 8);
-            $capacityBits = $dataCodewords * 8;
-
-            if ($required <= $capacityBits) {
+        for ($version = self::MIN_VERSION; $version <= self::MAX_VERSION; $version++) {
+            if ($byteCount <= self::byteCapacity($version, $level)) {
                 return $version;
             }
         }
 
-        throw new BarcodeException('QR payload is too large for current encoder (max version 10).');
+        throw new BarcodeException(sprintf(
+            'QR payload of %d bytes exceeds the capacity of version 40 with error correction %s (%d bytes).',
+            $byteCount,
+            $level->value,
+            self::byteCapacity(self::MAX_VERSION, $level),
+        ));
     }
 
     /**
@@ -170,21 +199,16 @@ final class QrCodeEncoder
      */
     private function buildDataCodewords(array $bytes, int $version, QrErrorCorrectionLevel $level): array
     {
-        $capacityBits = $this->levelData($level)['data'][$version] * 8;
-        $countBits    = $version <= 9 ? 8 : 16;
-        $bits         = [];
+        $capacity = self::dataCodewordCount($version, $level);
+        $bits     = [];
 
         $this->appendBits($bits, 0b0100, 4);
-        $this->appendBits($bits, count($bytes), $countBits);
+        $this->appendBits($bits, count($bytes), self::countBits($version));
         foreach ($bytes as $byte) {
             $this->appendBits($bits, $byte, 8);
         }
 
-        $terminator = $capacityBits - count($bits);
-        if ($terminator > 4) {
-            $terminator = 4;
-        }
-
+        $terminator = min(4, $capacity * 8 - count($bits));
         if ($terminator > 0) {
             $this->appendBits($bits, 0, $terminator);
         }
@@ -205,7 +229,7 @@ final class QrCodeEncoder
         }
 
         $pad = 0xEC;
-        while (count($codewords) < $this->levelData($level)['data'][$version]) {
+        while (count($codewords) < $capacity) {
             $codewords[] = $pad;
             $pad         = $pad === 0xEC ? 0x11 : 0xEC;
         }
@@ -214,15 +238,16 @@ final class QrCodeEncoder
     }
 
     /**
+     * Делит данные на блоки, добавляет коррекцию и перемежает кодовые слова.
+     *
      * @param list<int> $dataCodewords
      *
-     * @return list<int>
+     * @return array{0: list<int>, 1: list<int>} кодовые слова и номер блока каждого из них
      */
     private function addErrorCorrection(array $dataCodewords, int $version, QrErrorCorrectionLevel $level): array
     {
-        $levelData        = $this->levelData($level);
-        $numBlocks        = $levelData['blocks'][$version];
-        $eccPerBlock      = $levelData['ecc'][$version];
+        $numBlocks        = self::ERROR_CORRECTION_BLOCKS[$level->value][$version];
+        $eccPerBlock      = self::ECC_CODEWORDS_PER_BLOCK[$level->value][$version];
         $totalData        = count($dataCodewords);
         $shortBlockLength = intdiv($totalData, $numBlocks);
         $numLongBlocks    = $totalData % $numBlocks;
@@ -230,52 +255,51 @@ final class QrCodeEncoder
         $errorCorrection  = [];
         $offset           = 0;
 
+        // Блоки второй группы на одно кодовое слово длиннее и идут последними.
         for ($index = 0; $index < $numBlocks; $index++) {
             $dataLength = $shortBlockLength + ($index >= ($numBlocks - $numLongBlocks) ? 1 : 0);
-            $blockData  = [];
-
-            for ($position = 0; $position < $dataLength; $position++) {
-                $blockData[] = $dataCodewords[$offset + $position];
-            }
-
+            $blockData  = array_slice($dataCodewords, $offset, $dataLength);
             $offset += $dataLength;
 
             $blocks[]          = $blockData;
             $errorCorrection[] = $this->reedSolomon->encode($blockData, $eccPerBlock);
         }
 
-        $interleaved = [];
-        $maxDataSize = $shortBlockLength + ($numLongBlocks > 0 ? 1 : 0);
+        $interleaved    = [];
+        $codewordBlocks = [];
+        $maxDataSize    = $shortBlockLength + ($numLongBlocks > 0 ? 1 : 0);
         for ($position = 0; $position < $maxDataSize; $position++) {
-            foreach ($blocks as $block) {
+            foreach ($blocks as $blockIndex => $block) {
                 if ($position < count($block)) {
-                    $interleaved[] = $block[$position];
+                    $interleaved[]    = $block[$position];
+                    $codewordBlocks[] = $blockIndex;
                 }
             }
         }
 
         for ($position = 0; $position < $eccPerBlock; $position++) {
-            foreach ($errorCorrection as $eccBlock) {
-                $interleaved[] = $eccBlock[$position];
+            foreach ($errorCorrection as $blockIndex => $eccBlock) {
+                $interleaved[]    = $eccBlock[$position];
+                $codewordBlocks[] = $blockIndex;
             }
         }
 
-        return $interleaved;
+        return [$interleaved, $codewordBlocks];
     }
 
     /**
      * @param list<int> $codewords
-     *
-     * @return list<list<bool>>
+     * @param list<int> $codewordBlocks
      */
-    private function buildMatrix(int $version, array $codewords, QrErrorCorrectionLevel $level): array
+    private function buildSymbol(int $version, array $codewords, array $codewordBlocks, QrErrorCorrectionLevel $level): QrSymbol
     {
-        $size       = $version * 4 + 17;
-        $modules    = array_fill(0, $size, array_fill(0, $size, -1));
-        $isFunction = array_fill(0, $size, array_fill(0, $size, false));
+        $size            = $version * 4 + 17;
+        $modules         = array_fill(0, $size, array_fill(0, $size, -1));
+        $isFunction      = array_fill(0, $size, array_fill(0, $size, false));
+        $moduleCodewords = array_fill(0, $size, array_fill(0, $size, -1));
 
         $this->drawFunctionPatterns($modules, $isFunction, $version);
-        $this->drawCodewords($modules, $isFunction, $codewords);
+        $this->drawCodewords($modules, $isFunction, $moduleCodewords, $codewords);
 
         $bestMatrix  = [];
         $bestPenalty = null;
@@ -296,7 +320,14 @@ final class QrCodeEncoder
             }
         }
 
-        return $this->toBoolMatrix($bestMatrix);
+        return new QrSymbol(
+            version: $version,
+            level: $level,
+            matrix: $this->toBoolMatrix($bestMatrix),
+            moduleCodewords: $moduleCodewords,
+            codewordBlocks: $codewordBlocks,
+            eccCodewordsPerBlock: self::ECC_CODEWORDS_PER_BLOCK[$level->value][$version],
+        );
     }
 
     /**
@@ -322,8 +353,9 @@ final class QrCodeEncoder
         $this->drawFinderPattern($modules, $isFunction, 0, $size - 7);
 
         // Alignment patterns take precedence over timing modules (including row/column 6 in v7+).
-        foreach (self::ALIGNMENT_PATTERN_POSITIONS[$version] as $row) {
-            foreach (self::ALIGNMENT_PATTERN_POSITIONS[$version] as $col) {
+        $alignment = self::alignmentPatternPositions($version);
+        foreach ($alignment as $row) {
+            foreach ($alignment as $col) {
                 if ($isFunction[$row][$col]) {
                     continue;
                 }
@@ -414,9 +446,10 @@ final class QrCodeEncoder
     /**
      * @param list<list<int>> $modules
      * @param list<list<bool>> $isFunction
+     * @param list<list<int>> $moduleCodewords номер кодового слова в каждом модуле, -1 — служебный или остаточный
      * @param list<int> $codewords
      */
-    private function drawCodewords(array &$modules, array $isFunction, array $codewords): void
+    private function drawCodewords(array &$modules, array $isFunction, array &$moduleCodewords, array $codewords): void
     {
         $size     = count($modules);
         $bitIndex = 0;
@@ -437,6 +470,8 @@ final class QrCodeEncoder
 
                     $bit = 0;
                     if ($bitIndex < $bitCount) {
+                        $moduleCodewords[$y][$x] = intdiv($bitIndex, 8);
+
                         $byte = $codewords[intdiv($bitIndex, 8)];
                         $bit  = ($byte >> (7 - ($bitIndex % 8))) & 1;
                         $bitIndex++;
@@ -517,14 +552,6 @@ final class QrCodeEncoder
         }
 
         $modules[$size - 8][8] = 1;
-    }
-
-    /**
-     * @return array{data: array<int, int>, ecc: array<int, int>, blocks: array<int, int>}
-     */
-    private function levelData(QrErrorCorrectionLevel $level): array
-    {
-        return self::CAPACITY[$level->value];
     }
 
     private function levelFormatBitsPrefix(QrErrorCorrectionLevel $level): int

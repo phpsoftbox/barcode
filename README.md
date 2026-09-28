@@ -12,7 +12,7 @@
 - роутинг генерации через цепочку `BarcodeGeneratorChain`.
 
 Текущие ограничения первой итерации:
-- QR: уровни коррекции `M` и `H`, версии до `10`;
+- QR: байтовый режим, уровни коррекции `M` и `H`, версии от `1` до `40` (до 2331 байт при `M`, 1273 при `H`);
 - DataMatrix: квадратные ECC200-символы от `10x10` до `144x144`.
 
 ## Базовое использование
@@ -30,7 +30,6 @@ use PhpSoftBox\Barcode\Generator\DataMatrixGenerator;
 use PhpSoftBox\Barcode\Generator\Ean13PngGenerator;
 use PhpSoftBox\Barcode\Generator\Ean13SvgGenerator;
 use PhpSoftBox\Barcode\Generator\QrGenerator;
-use PhpSoftBox\Barcode\QrErrorCorrectionLevel;
 use PhpSoftBox\Barcode\QrLogoOptions;
 
 $generator = new BarcodeGeneratorChain([
@@ -62,9 +61,8 @@ $qr = $generator->generate(
     options: new BarcodeOptions(
         format: BarcodeOutputFormat::Svg,
         height: 256,
-        qrErrorCorrection: QrErrorCorrectionLevel::H,
-        qrLogo: new QrLogoOptions(
-            path: __DIR__ . '/logo.png',
+        qrLogo: new QrLogoOptions( // с логотипом уровень коррекции всегда H
+            path: __DIR__ . '/logo.svg',
             sizeRatio: 0.18,
             padding: 6,
             backgroundColor: '#F3F4F6',
@@ -140,11 +138,18 @@ $mark = $generator->generate(
 По умолчанию флаг выключен и вывод не меняется. Подробности — в
 [документации GS1 DataMatrix](docs/gs1-datamatrix.md).
 
-## QR с логотипом
+## QR
 
+- версия выбирается автоматически — минимальная из 1–40, в которую помещаются данные; сверх ёмкости версии 40 —
+  `BarcodeException`;
 - при `qrLogo` генератор автоматически использует уровень коррекции `H`;
-- `QrLogoOptions` поддерживает настройку размера/паддинга и стиля зоны под логотип:
-  `backgroundColor`, `borderColor`, `borderWidth`, `cornerRadius`.
+- `QrLogoOptions` задаёт размер знака (`sizeRatio` — доля стороны символа), отступ и оформление подложки:
+  `backgroundColor`, `borderColor`, `borderWidth`, `cornerRadius`; в PNG нужен растровый знак;
+- логотип, после которого код может не читаться (задевает служебные узоры или закрывает слишком много кодовых слов
+  блока), отклоняется `BarcodeException`.
+
+Ёмкость по версиям, рекомендуемое оформление знака, пример длинного URL с логотипом и проверка декодерами — в
+[документации QR](docs/qr.md).
 
 ## Тестовые артефакты
 
@@ -152,8 +157,8 @@ $mark = $generator->generate(
 - генерационные тесты сохраняют SVG/PNG артефакты в `local/tests/barcode`;
 - при необходимости сохранение артефактов можно отключить: `BARCODE_TEST_SAVE_ARTIFACTS=0 vendor/bin/phpunit`.
 
-Для Code 39, Code 128, GS1 DataMatrix и DataMatrix есть отдельные проверки независимым декодером — см.
-[Code 39](docs/code39.md), [Code 128](docs/code128.md), [GS1 DataMatrix](docs/gs1-datamatrix.md) и ниже.
+Для Code 39, Code 128, QR, GS1 DataMatrix и DataMatrix есть отдельные проверки независимым декодером — см.
+[Code 39](docs/code39.md), [Code 128](docs/code128.md), [QR](docs/qr.md), [GS1 DataMatrix](docs/gs1-datamatrix.md) и ниже.
 
 Для DataMatrix есть отдельная [проверка независимыми декодерами](docs/datamatrix-testing.md):
 ZXing-C++ и libdmtx побайтно проверяют матрицы, SVG, PNG и растрированный PDF.
