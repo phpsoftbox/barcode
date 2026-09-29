@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "07a87f59d3a61bb206d440cbdcad530e",
+    "content-hash": "5d3ac21dd76dd5f9f9c5926240872ef2",
     "packages": [],
     "packages-dev": [
         {
@@ -813,15 +813,16 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/phpsoftbox/cli-app.git",
-                "reference": "98022618adada7c2fb386c834bcb3b19536d6c2b"
+                "reference": "9938bbc10bf459e68b809717b914b6efd5feeb32"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/phpsoftbox/cli-app/zipball/98022618adada7c2fb386c834bcb3b19536d6c2b",
-                "reference": "98022618adada7c2fb386c834bcb3b19536d6c2b",
+                "url": "https://api.github.com/repos/phpsoftbox/cli-app/zipball/9938bbc10bf459e68b809717b914b6efd5feeb32",
+                "reference": "9938bbc10bf459e68b809717b914b6efd5feeb32",
                 "shasum": ""
             },
             "require": {
+                "ext-mbstring": "*",
                 "php": "^8.4",
                 "phpsoftbox/error-formatter": "dev-master",
                 "psr/container": "^2.0"
@@ -860,29 +861,29 @@
                 "issues": "https://github.com/phpsoftbox/cli-app/issues",
                 "source": "https://github.com/phpsoftbox/cli-app/tree/master"
             },
-            "time": "2026-04-05T14:18:20+00:00"
+            "time": "2026-06-16T08:45:00+00:00"
         },
         {
             "name": "phpsoftbox/cs-fixer",
-            "version": "v1.1.0",
+            "version": "v1.2.1",
             "source": {
                 "type": "git",
                 "url": "https://github.com/phpsoftbox/cs-fixer.git",
-                "reference": "ac4cd9f1fc24f64edd241b9ffc8ba0b6c06a0288"
+                "reference": "e2323c5f7ca4c7af23a5915d491cb96103a93c78"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/phpsoftbox/cs-fixer/zipball/ac4cd9f1fc24f64edd241b9ffc8ba0b6c06a0288",
-                "reference": "ac4cd9f1fc24f64edd241b9ffc8ba0b6c06a0288",
+                "url": "https://api.github.com/repos/phpsoftbox/cs-fixer/zipball/e2323c5f7ca4c7af23a5915d491cb96103a93c78",
+                "reference": "e2323c5f7ca4c7af23a5915d491cb96103a93c78",
                 "shasum": ""
             },
             "require": {
-                "php": "^8.4"
+                "friendsofphp/php-cs-fixer": "^3.95",
+                "php": "^8.5",
+                "phpsoftbox/cli-app": "dev-master"
             },
             "require-dev": {
-                "friendsofphp/php-cs-fixer": "^3.93",
-                "phpsoftbox/cli-app": "dev-master",
-                "phpunit/phpunit": "^11.2"
+                "phpunit/phpunit": "^13.3"
             },
             "bin": [
                 "bin/psb-cs-fixer"
@@ -906,9 +907,9 @@
             "description": "CS Fixer rules for the PhpSoftBox framework",
             "support": {
                 "issues": "https://github.com/phpsoftbox/cs-fixer/issues",
-                "source": "https://github.com/phpsoftbox/cs-fixer/tree/v1.1.0"
+                "source": "https://github.com/phpsoftbox/cs-fixer/tree/v1.2.1"
             },
-            "time": "2026-03-05T11:09:47+00:00"
+            "time": "2026-09-29T05:10:16+00:00"
         },
         {
             "name": "phpsoftbox/error-formatter",
@@ -4836,9 +4837,7 @@
     ],
     "aliases": [],
     "minimum-stability": "dev",
-    "stability-flags": {
-        "phpsoftbox/cli-app": 20
-    },
+    "stability-flags": {},
     "prefer-stable": true,
     "prefer-lowest": false,
     "platform": {
